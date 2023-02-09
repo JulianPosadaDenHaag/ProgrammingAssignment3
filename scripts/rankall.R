@@ -2,7 +2,7 @@ library(here)
 library(tidyverse)
 library(dplyr)
 
-rankhospital <- function(state, outcome, ranking = "best" ) 
+rankall <- function(outcome, ranking ="best" ) 
 {
         ## Read outcome data
         df_outcome <- read.csv(here::here("data", 
@@ -13,6 +13,7 @@ rankhospital <- function(state, outcome, ranking = "best" )
         
         df_outcome[df_outcome == "Not Available"] <- NA
         
+       
         
         outcome_clean <- df_outcome%>% 
                 select(State,Hospital.Name,starts_with("Hospital.30.Day.Death"))
@@ -24,35 +25,26 @@ rankhospital <- function(state, outcome, ranking = "best" )
         
         colnames(outcome_clean) = c("State","Hospital_Name", "heart attack", "heart failure", "pneumonia")
         
+        states<- distinct(outcome_clean[1])
+        
         ## Check that state and outcome are valid
         if(!outcome%in%colnames(outcome_clean[3:5])) stop("invalid outcome")
         
         dfResult <- outcome_clean %>% drop_na()
         
-        states<- dfResult %>% 
-                select(State) %>% 
-                unique()
+        result <- dfResult %>% # Applying row_number function
+                select(State,Hospital_Name, outcome) %>% 
+                arrange(get(outcome), State,Hospital_Name) %>% 
+                group_by(State) 
         
-        if (!(state %in% states$State)) stop("invalid State")
-        
-        result <- dfResult %>% 
-                filter(State == state) %>% 
-                arrange(get(outcome))%>%                       # Applying row_number function
-                mutate(rank = row_number())%>% 
-                group_by(State)%>% 
-                select(Hospital_Name, outcome, rank)
-        
-        x<- result%>%slice_max(rank)
         ## Return hospital name in that state with lowest 30-day death
         ## rate
         
-        if(ranking == "best")result<- result%>%slice(1)  
-        else if(ranking == "worst") result <- result%>% slice_max(get(outcome))  
-        else if (ranking < x["rank"]) result <- result%>% slice(ranking) 
-        else (return (NA))
+        if(ranking == "best")result<- result%>%slice_head() %>% select(Hospital_Name, State)  
+        else if(ranking == "worst") result <- result%>% slice_max(get(outcome)) %>% select(Hospital_Name, State)  
+        else result <- result%>% slice(ranking)  %>% select(Hospital_Name, State) 
         
-        
-        return(result)
+        as<- merge(x= states, y=result, by= "State", all = TRUE)
+        return(as)
 }
-
 
